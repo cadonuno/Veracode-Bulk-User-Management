@@ -38,6 +38,7 @@ appropriate file protections in place.
         If a team does not exist, it will be created.
 
 If a credentials file is not created, you can export the following environment variables:
+
     export VERACODE_API_KEY_ID=<YOUR_API_KEY_ID>
     export VERACODE_API_KEY_SECRET=<YOUR_API_KEY_SECRET>
     python bulk-update-users-permissions.py -f <excel_file_with_user_information> [-d]
