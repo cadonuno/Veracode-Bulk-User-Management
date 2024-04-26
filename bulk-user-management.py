@@ -34,15 +34,38 @@ class UnableToCreateTeamException(Exception):
     def get_message(self):
         return self.message
 
-USERNAME_COLUMN = 1 
-TEAMS_COLUMN = 2
-ROLES_COLUMN = 3
-TEAMS_MANAGED_COLUMN = 4
-STATUS_SUCCESS = "success"
+
+API_SERVICE_ACCOUNT_COLUMN = 1
+
+ACTIVE_COLUMN = 2
+USERNAME_COLUMN = 3
+FIRST_NAME_COLUMN = 4
+LAST_NAME_COLUMN = 5
+
+EMAIL_COLUMN = 6
+PHONE_COLUMN = 7
+
+POSITION_COLUMN = 8
+RESTRICT_LOGIN_IPS_COLUMN = 9
+LOGIN_ENABLED_COLUMN = 10
+
+CUSTOM_1_COLUMN = 11
+CUSTOM_2_COLUMN = 12
+CUSTOM_3_COLUMN = 13
+CUSTOM_4_COLUMN = 14
+CUSTOM_5_COLUMN = 15
+
+TEAMS_COLUMN = 16
+ROLES_COLUMN = 17
+TEAMS_MANAGED_COLUMN = 18
+
 FIRST_ROW=3
 LAST_COLUMN = TEAMS_MANAGED_COLUMN
+STATUS_COLUMN = LAST_COLUMN+1
+STATUS_SUCCESS = "success"
 TEAM_ADMIN_RELATIONSHIP = "ADMIN"
 TEAM_MEMBER_RELATIONSHIP = "MEMBER"
+NONE = "NONE"
 
 teams_cache = {}
 
@@ -58,10 +81,11 @@ sleep_time = 10
 
 def print_help():
     """Prints command line options and exits"""
-    print("""bulk-update-users-permissions.py -f <excel_file_with_user_information> [-d]"
+    print("""bulk-user-management.py -f <excel_file_with_user_information> [-c] [-d]"
         Reads all lines in <excel_file_with_user_information>, for each line, it will modify the user profile
         If a field is left empty, it will not be modified, to clear assigned teams, set the value to NONE (case sensitive). 
         If a team does not exist, it will be created.
+        To create new users, you can pass the -c flag.
 """)
     sys.exit()
 
@@ -78,7 +102,7 @@ def find_exact_match(list, to_find, field_name):
     print(f"Unable to find a member of list with '{field_name}' equal to '{to_find}'")
     raise NoExactMatchFoundException(f"Unable to find a member of list with {field_name} equal to {to_find}")
 
-def get_item_from_api_call(api_base, api_to_call, item_to_find, list_name, field_to_check, field_to_get, is_exact_match, verbose):
+def get_item_from_api_call(api_base, api_to_call, item_to_find, list_name, field_to_check, field_to_get, is_exact_match, verbose, error_on_not_found=True):
     global failed_attempts
     global sleep_time
     global max_attempts_per_request
@@ -94,10 +118,12 @@ def get_item_from_api_call(api_base, api_to_call, item_to_find, list_name, field
             print(data)
         if "_embedded" in data and len(data["_embedded"][list_name]) > 0:
             return (find_exact_match(data["_embedded"][list_name], item_to_find, field_to_check) if is_exact_match else data["_embedded"][list_name][0])[field_to_get]
-        else:
+        elif error_on_not_found:
             error_message = f"ERROR: No {list_name} named '{item_to_find}' found"
             print(error_message)
             raise NoResultFoundException(error_message)
+        else:
+            return ""
     else:
         print(f"ERROR: trying to get {list_name} named {item_to_find}")
         print(f"ERROR: code: {response.status_code}")
@@ -238,63 +264,142 @@ def get_error_node_value(body):
         return ""
     
 def get_user_guid(api_base, username, verbose):
-    return get_item_from_api_call(api_base, "api/authn/v2/users?deleted=false&user_name="+ request_encode(username.strip()), username.strip(), "users", "user_name", "user_id", True, verbose)
+    return get_item_from_api_call(api_base, "api/authn/v2/users?deleted=false&inactive=true&user_name="+ request_encode(username.strip()), username.strip(), "users", "user_name", "user_id", True, verbose, False)
 
-def modify_user(api_base, username, teams, roles, teamsManaged, verbose):
-    if not username:
-        error_message = "Empty user field found"
+def add_field_if_not_blank_or_none(current_content, field_name, field_value):
+    if not field_value:
+        return current_content
+    if field_value == NONE:
+        field_value = ''
+    if field_name:
+        return current_content + f''',
+            "{field_name}": "{field_value}"'''
+    else:
+        return current_content + f''',
+            {field_value}'''
+
+def list_allowed_ip_addresses(allowed_ip_addresses):
+    if not allowed_ip_addresses:
+        return ""
+    if allowed_ip_addresses == NONE:
+        return '"ip_restricted": false, "allowed_ip_addresses": []'
+    all_ip_addresses = allowed_ip_addresses.split(",")
+    inner_ip_addresses_list = ""
+    for ip_address in all_ip_addresses:
+        inner_ip_addresses_list = inner_ip_addresses_list + (""",
+            """ if inner_ip_addresses_list else "") + f'"{ip_address.strip()}"'
+    if inner_ip_addresses_list:
+        return f'''
+            "ip_restricted": true, "allowed_ip_addresses": [
+                {inner_ip_addresses_list}
+            ]'''
+    else:
+        #this should, realistically, never happen
+        return None
+
+def modify_user(api_base, user, can_create, verbose):
+    #TODO: add support for API service aaccounts
+    if not user or not user["username"]:
+        error_message = "Empty username field found"
         print(error_message)
         return error_message
+
+    user_guid = get_user_guid(api_base, user["username"], verbose)
+
+    if not user_guid and not can_create:
+        error_message = f"User with name '{user["username"]}' not found"
+        print(error_message)
+        return error_message
+    
+    is_new_user = not user_guid 
+
+    if is_new_user:
+        print(f"Creating user: {user["username"]}")
+    else:
+        print(f"Updating user permissions for: {user["username"]}")
+
     if verbose:
-        print(f"Updating user permissions for: {username}")
-
-    user_guid = get_user_guid(api_base, username, verbose)
-
-    if not user_guid:
-        error_message = f"User with name '{username}' not found"
-        print(error_message)
-        return error_message
+        print("Using data:")
+        print(user)    
     
-    path = f"{api_base}api/authn/v2/users/{user_guid}?partial=true"
-    roles_json = list_roles(roles)
-    teams_json = list_teams(api_base, teams, teamsManaged, verbose)
-    if not roles_json and not teams_json:
-        error_message = f"No teams or roles found for user '{username}', skipped this line"
-        print(error_message)        
-        return error_message
+    path = f"{api_base}api/authn/v2/users{"?generate_api_creds=false" if is_new_user else f"/{user_guid}?partial=true"}"
     
-    content = roles_json
-    if teams_json:
-        if roles_json:
-            content = content + """, 
-            """ + teams_json
-        else:
-            content = teams_json
+    content = f'''"user_name": "{user["username"]}"'''
+    #content = add_field_if_not_blank_or_none(content, What should it be here?, user["is_service_account)
+    content = add_field_if_not_blank_or_none(content, "active", user["is_active"])
+    content = add_field_if_not_blank_or_none(content, "first_name", user["first_name"])
+    content = add_field_if_not_blank_or_none(content, "last_name", user["last_name"])
+    content = add_field_if_not_blank_or_none(content, "email_address", user["email"])
+    content = add_field_if_not_blank_or_none(content, "phone", user["phone"])
+    content = add_field_if_not_blank_or_none(content, "title", user["position"])
+    content = add_field_if_not_blank_or_none(content, None, list_allowed_ip_addresses(user["restrict_login_ips"]))
+    content = add_field_if_not_blank_or_none(content, "login_enabled", (user["is_login_enabled"] or "").lower())
+    content = add_field_if_not_blank_or_none(content, "custom_one", user["custom_1"])
+    content = add_field_if_not_blank_or_none(content, "custom_two", user["custom_2"])
+    content = add_field_if_not_blank_or_none(content, "custom_three", user["custom_3"])
+    content = add_field_if_not_blank_or_none(content, "custom_four", user["custom_4"])
+    content = add_field_if_not_blank_or_none(content, "custom_five", user["custom_5"])
+    content = add_field_if_not_blank_or_none(content, None, list_roles(user["roles"]))
+    content = add_field_if_not_blank_or_none(content, None, list_teams(api_base, user["teams"], user["teams_managed"], verbose))
+
     request_content=f'''{{
             {content}
         }}'''
     if verbose:
+        print(f"Sending {"POST" if is_new_user else "PUT"} request to: {path}")
+        print("Request Content:")
         print(request_content)
 
-    response = requests.put(path, auth=RequestsAuthPluginVeracodeHMAC(), headers=json_headers, json=json.loads(request_content))
+    if is_new_user:
+        response = requests.post(path, auth=RequestsAuthPluginVeracodeHMAC(), headers=json_headers, json=json.loads(request_content))
+    else:
+        response = requests.put(path, auth=RequestsAuthPluginVeracodeHMAC(), headers=json_headers, json=json.loads(request_content))
 
     if verbose:
         print(f"status code {response.status_code}")
         body = response.json()
         if body:
             print(body)
-    if response.status_code == 200:
-        print(f"Successfully modified user permissions for {username}.")
+    if response.status_code == 200 or response.status_code == 201:
+        if is_new_user:
+            print(f"Successfully created {user["username"]}.")
+        else:
+            print(f"Successfully modified user permissions for {user["username"]}.")
         return STATUS_SUCCESS
     else:
         body = response.json()
         if (body):
-            return f"Unable to modify user permissions: {response.status_code} - {body}"
+            error_message = f"Operation failed for user {user["username"]}: {response.status_code} - {body}"
         else:
-            return f"Unable to modify user permissions: {response.status_code}"
+            error_message = f"Operation failed for user {user["username"]}: {response.status_code}"
+        print(error_message)
+        return error_message
+    
+def parse_user(excel_sheet, row):
+    user = {}
+    user["is_service_account"] = excel_sheet.cell(row = row, column = API_SERVICE_ACCOUNT_COLUMN).value
+    user["is_active"] = excel_sheet.cell(row = row, column = ACTIVE_COLUMN).value
+    user["username"] = excel_sheet.cell(row = row, column = USERNAME_COLUMN).value
+    user["first_name"] = excel_sheet.cell(row = row, column = FIRST_NAME_COLUMN).value
+    user["last_name"] = excel_sheet.cell(row = row, column = LAST_NAME_COLUMN).value
+    user["email"] = excel_sheet.cell(row = row, column = EMAIL_COLUMN).value
+    user["phone"] = excel_sheet.cell(row = row, column = PHONE_COLUMN).value
+    user["position"] = excel_sheet.cell(row = row, column = POSITION_COLUMN).value
+    user["restrict_login_ips"] = excel_sheet.cell(row = row, column = RESTRICT_LOGIN_IPS_COLUMN).value
+    user["is_login_enabled"] = excel_sheet.cell(row = row, column = LOGIN_ENABLED_COLUMN).value
+    user["custom_1"] = excel_sheet.cell(row = row, column = CUSTOM_1_COLUMN).value
+    user["custom_2"] = excel_sheet.cell(row = row, column = CUSTOM_2_COLUMN).value
+    user["custom_3"] = excel_sheet.cell(row = row, column = CUSTOM_3_COLUMN).value
+    user["custom_4"] = excel_sheet.cell(row = row, column = CUSTOM_4_COLUMN).value
+    user["custom_5"] = excel_sheet.cell(row = row, column = CUSTOM_5_COLUMN).value
+    user["teams"] = excel_sheet.cell(row = row, column = TEAMS_COLUMN).value
+    user["roles"] = excel_sheet.cell(row = row, column = ROLES_COLUMN).value
+    user["teams_managed"] = excel_sheet.cell(row = row, column = TEAMS_MANAGED_COLUMN).value
+
+    return user
     
 
-def modify_all_users(api_base, file_name, verbose):
+def modify_all_users(api_base, file_name, can_create, verbose):
     global failed_attempts
     excel_file = openpyxl.load_workbook(file_name)
     excel_sheet = excel_file.active    
@@ -308,10 +413,8 @@ def modify_all_users(api_base, file_name, verbose):
                 try:
                     print(f"Importing row {row-FIRST_ROW+1}/{excel_sheet.max_row-FIRST_ROW+1} (physical row: {row}):")
                     status = modify_user(api_base, 
-                                         excel_sheet.cell(row = row, column = USERNAME_COLUMN).value, 
-                                         excel_sheet.cell(row = row, column = TEAMS_COLUMN).value, 
-                                         excel_sheet.cell(row = row, column = ROLES_COLUMN).value, 
-                                         excel_sheet.cell(row = row, column = TEAMS_MANAGED_COLUMN).value, 
+                                         parse_user(excel_sheet, row),
+                                         can_create, 
                                          verbose)
                     print(f"Finished importing row {row-FIRST_ROW+1}/{excel_sheet.max_row-FIRST_ROW+1} (physical row: {row})")
                     print("---------------------------------------------------------------------------")
@@ -330,25 +433,28 @@ def get_api_base():
         return api_base.replace("{instance}", "com", 1)
 
 def main(argv):
-    """Allows for bulk modifications for user permissions"""
+    """Allows for bulk creation or modifying user and permissions"""
     global failed_attempts
     excel_file = None
     try:
         verbose = False
+        can_create = False
         file_name = ''
 
-        opts, args = getopt.getopt(argv, "hdf:", ["file_name="])
+        opts, args = getopt.getopt(argv, "hdcf:", ["file_name="])
         for opt, arg in opts:
             if opt == '-h':
                 print_help()
             if opt == '-d':
                 verbose = True
+            if opt == '-c':
+                can_create = True
             if opt in ('-f', '--file_name'):
                 file_name=arg
 
         api_base = get_api_base()
         if file_name:
-            modify_all_users(api_base, file_name, verbose)
+            modify_all_users(api_base, file_name, can_create, verbose)
         else:
             print_help()
     except requests.RequestException as e:

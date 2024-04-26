@@ -1,18 +1,18 @@
-# Veracode Bulk User Permissions
+# Veracode Bulk User Creator/Editor
 
 ## Overview
 
-This script allows for bulk setting of roles and permissions for Veracode users
+This script allows for bulk modifying and/or creating Users in Veracode.
 
 ## Installation
 
 Clone this repository:
 
-    git clone https://github.com/cadonuno/Veracode-Bulk-Team-Assignment.git
+    git clone https://github.com/cadonuno/Veracode-Bulk-User-Management.git
 
 Install dependencies:
 
-    cd Veracode-Bulk-Team-Assignment
+    cd Veracode-Bulk-User-Management
     pip install -r requirements.txt
 
 ### Getting Started
@@ -32,16 +32,17 @@ appropriate file protections in place.
     a new column will be added to the right containing the status of each line
     
 ### Running the script
-    py bulk-update-users-permissions.py -f <excel_file_with_user_information> [-d]"
+    py bulk-user-management.py -f <excel_file_with_user_information> [-c] [-d]
         Reads all lines in <excel_file_with_user_information>, for each line, it will modify the user profile
         If a field is left empty, it will not be modified, to clear assigned teams, set the value to NONE (case sensitive). 
         If a team does not exist, it will be created.
+        To create new users, you can pass the -c flag.
 
 If a credentials file is not created, you can export the following environment variables:
 
     export VERACODE_API_KEY_ID=<YOUR_API_KEY_ID>
     export VERACODE_API_KEY_SECRET=<YOUR_API_KEY_SECRET>
-    python bulk-update-users-permissions.py -f <excel_file_with_user_information> [-d]
+    python bulk-user-management.py -f <excel_file_with_user_information> [-c] [-d]
 
 ## License
 
