@@ -2,7 +2,7 @@
 
 ## Overview
 
-This script allows for bulk modifying and/or creating Users in Veracode.
+This script allows for bulk modifying and/or creating users in Veracode.
 
 ## Installation
 
