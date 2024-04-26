@@ -234,7 +234,7 @@ def get_all_teams_json(api_base, all_teams, all_teams_managed, verbose):
 def list_teams(api_base, teams, teamsManaged, verbose):
     if not teams and not teamsManaged:
         return ""
-    if teams == "NONE":
+    if teams == NONE:
         return '"teams": []'
     all_teams_json = get_all_teams_json(api_base, teams.split(",") if teams else {}, teamsManaged.split(",") if teamsManaged else {}, verbose)
 
@@ -298,7 +298,8 @@ def list_allowed_ip_addresses(allowed_ip_addresses):
         return None
 
 def modify_user(api_base, user, can_create, verbose):
-    #TODO: add support for API service aaccounts
+    #TODO: add support for API service accounts
+    #TODO: add support for creating SAML accounts
     if not user or not user["username"]:
         error_message = "Empty username field found"
         print(error_message)
@@ -406,7 +407,7 @@ def modify_all_users(api_base, file_name, can_create, verbose):
     try:
         for row in range(FIRST_ROW, excel_sheet.max_row+1):
             failed_attempts = 0
-            status=excel_sheet.cell(row = row, column = LAST_COLUMN+1).value
+            status=excel_sheet.cell(row = row, column = STATUS_COLUMN).value
             if (status == STATUS_SUCCESS):
                 print(f"Skipping row {row-FIRST_ROW+1} as it was already done (physical row: {row})")
             else:
@@ -420,7 +421,7 @@ def modify_all_users(api_base, file_name, can_create, verbose):
                     print("---------------------------------------------------------------------------")
                 except (NoExactMatchFoundException, UnableToCreateTeamException, NoResultFoundException) as e:
                     status= e.get_message()
-                excel_sheet.cell(row = row, column = LAST_COLUMN+1).value=status
+                excel_sheet.cell(row = row, column = STATUS_COLUMN).value=status
     finally:
         excel_file.save(filename=file_name)
 
