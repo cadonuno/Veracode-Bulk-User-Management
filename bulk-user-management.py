@@ -62,6 +62,8 @@ TEAMS_MANAGED_COLUMN = 18
 FIRST_ROW=3
 LAST_COLUMN = TEAMS_MANAGED_COLUMN
 STATUS_COLUMN = LAST_COLUMN+1
+API_ID_COLUMN = STATUS_COLUMN+1
+API_SECRET_COLUMN = API_ID_COLUMN+1
 STATUS_SUCCESS = "success"
 TEAM_ADMIN_RELATIONSHIP = "ADMIN"
 TEAM_MEMBER_RELATIONSHIP = "MEMBER"
@@ -81,11 +83,12 @@ sleep_time = 10
 
 def print_help():
     """Prints command line options and exits"""
-    print("""bulk-user-management.py -f <excel_file_with_user_information> [-c] [-d]"
+    print("""bulk-user-management.py -f <excel_file_with_user_information> [-c] [-g] [-d]"
         Reads all lines in <excel_file_with_user_information>, for each line, it will modify the user profile
         If a field is left empty, it will not be modified, to clear assigned teams, set the value to NONE (case sensitive). 
         If a team does not exist, it will be created.
         To create new users, you can pass the -c flag.
+        You can use the -g flag to generate API credentials for new API accounts.
 """)
     sys.exit()
 
@@ -297,20 +300,26 @@ def list_allowed_ip_addresses(allowed_ip_addresses):
         #this should, realistically, never happen
         return None
 
-def modify_user(api_base, user, can_create, verbose):
-    #TODO: add support for API service accounts
+def add_permission_based_on_teams(content):
+    return content + ''',"permissions":[
+      {
+         "permission_name":"apiUser"
+      }
+   ]'''
+
+def modify_user(api_base, user, can_create, generate_credentials, verbose):
     #TODO: add support for creating SAML accounts
     if not user or not user["username"]:
         error_message = "Empty username field found"
         print(error_message)
-        return error_message
+        return error_message, "", ""
 
     user_guid = get_user_guid(api_base, user["username"], verbose)
 
     if not user_guid and not can_create:
         error_message = f"User with name '{user["username"]}' not found"
         print(error_message)
-        return error_message
+        return error_message, "", ""
     
     is_new_user = not user_guid 
 
@@ -321,12 +330,19 @@ def modify_user(api_base, user, can_create, verbose):
 
     if verbose:
         print("Using data:")
-        print(user)    
+        print(user)
     
-    path = f"{api_base}api/authn/v2/users{"?generate_api_creds=false" if is_new_user else f"/{user_guid}?partial=true"}"
-    
+    if is_new_user:
+        url_ending = f"?generate_api_creds={"true" if generate_credentials and user["is_service_account"] else "false"}"
+    else:
+        url_ending = f"/{user_guid}?partial=true"
+
+
+    path = f"{api_base}api/authn/v2/users{url_ending}"
+
     content = f'''"user_name": "{user["username"]}"'''
-    #content = add_field_if_not_blank_or_none(content, What should it be here?, user["is_service_account)
+    if is_new_user and user["is_service_account"]:
+        content = add_permission_based_on_teams(content)
     content = add_field_if_not_blank_or_none(content, "active", user["is_active"])
     content = add_field_if_not_blank_or_none(content, "first_name", user["first_name"])
     content = add_field_if_not_blank_or_none(content, "last_name", user["last_name"])
@@ -366,7 +382,11 @@ def modify_user(api_base, user, can_create, verbose):
             print(f"Successfully created {user["username"]}.")
         else:
             print(f"Successfully modified user permissions for {user["username"]}.")
-        return STATUS_SUCCESS
+        if generate_credentials and body["api_credentials"]:
+            api_credentials = body["api_credentials"]
+            api_id = api_credentials["api_id"]
+            api_secret = api_credentials["api_secret"]
+        return STATUS_SUCCESS, api_id, api_secret
     else:
         body = response.json()
         if (body):
@@ -374,7 +394,7 @@ def modify_user(api_base, user, can_create, verbose):
         else:
             error_message = f"Operation failed for user {user["username"]}: {response.status_code}"
         print(error_message)
-        return error_message
+        return error_message, "", ""
     
 def parse_user(excel_sheet, row):
     user = {}
@@ -400,7 +420,7 @@ def parse_user(excel_sheet, row):
     return user
     
 
-def modify_all_users(api_base, file_name, can_create, verbose):
+def modify_all_users(api_base, file_name, can_create, generate_credentials, verbose):
     global failed_attempts
     excel_file = openpyxl.load_workbook(file_name)
     excel_sheet = excel_file.active    
@@ -413,15 +433,20 @@ def modify_all_users(api_base, file_name, can_create, verbose):
             else:
                 try:
                     print(f"Importing row {row-FIRST_ROW+1}/{excel_sheet.max_row-FIRST_ROW+1} (physical row: {row}):")
-                    status = modify_user(api_base, 
-                                         parse_user(excel_sheet, row),
-                                         can_create, 
-                                         verbose)
+                    status, api_id, api_secret = modify_user(api_base, 
+                                                 parse_user(excel_sheet, row),
+                                                 can_create, 
+                                                 generate_credentials,
+                                                 verbose)
                     print(f"Finished importing row {row-FIRST_ROW+1}/{excel_sheet.max_row-FIRST_ROW+1} (physical row: {row})")
                     print("---------------------------------------------------------------------------")
                 except (NoExactMatchFoundException, UnableToCreateTeamException, NoResultFoundException) as e:
                     status= e.get_message()
+                    api_id = ""
+                    api_secret = ""
                 excel_sheet.cell(row = row, column = STATUS_COLUMN).value=status
+                excel_sheet.cell(row = row, column = API_ID_COLUMN).value=api_id
+                excel_sheet.cell(row = row, column = API_SECRET_COLUMN).value=api_secret
     finally:
         excel_file.save(filename=file_name)
 
@@ -440,9 +465,10 @@ def main(argv):
     try:
         verbose = False
         can_create = False
+        generate_credentials = False
         file_name = ''
 
-        opts, args = getopt.getopt(argv, "hdcf:", ["file_name="])
+        opts, args = getopt.getopt(argv, "hdcgf:", ["file_name="])
         for opt, arg in opts:
             if opt == '-h':
                 print_help()
@@ -450,12 +476,14 @@ def main(argv):
                 verbose = True
             if opt == '-c':
                 can_create = True
+            if opt == '-g':
+                generate_credentials = True
             if opt in ('-f', '--file_name'):
                 file_name=arg
 
         api_base = get_api_base()
         if file_name:
-            modify_all_users(api_base, file_name, can_create, verbose)
+            modify_all_users(api_base, file_name, can_create, generate_credentials, verbose)
         else:
             print_help()
     except requests.RequestException as e:

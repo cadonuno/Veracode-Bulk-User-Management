@@ -37,12 +37,13 @@ appropriate file protections in place.
         If a field is left empty, it will not be modified, to clear assigned teams, set the value to NONE (case sensitive). 
         If a team does not exist, it will be created.
         To create new users, you can pass the -c flag.
+        You can use the -g flag to generate API credentials for new API accounts.
 
 If a credentials file is not created, you can export the following environment variables:
 
     export VERACODE_API_KEY_ID=<YOUR_API_KEY_ID>
     export VERACODE_API_KEY_SECRET=<YOUR_API_KEY_SECRET>
-    python bulk-user-management.py -f <excel_file_with_user_information> [-c] [-d]
+    python bulk-user-management.py -f <excel_file_with_user_information> [-c] [-g] [-d]
 
 ## License
 
