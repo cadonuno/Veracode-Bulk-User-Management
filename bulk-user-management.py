@@ -113,7 +113,7 @@ def get_item_from_api_call(api_base, api_to_call, item_to_find, list_name, field
     if verbose:
         print(f"Calling: {path}")
 
-    response = requests.get(path, auth=RequestsAuthPluginVeracodeHMAC(), headers=json_headers)
+    response = requests.get(path, auth=RequestsAuthPluginVeracodeHMAC(), headers=json_headers, verify=True)
     data = response.json()
 
     if response.status_code == 200:
@@ -170,7 +170,7 @@ def create_team_for_name(api_base, team_name, verbose):
     if verbose:
         print(request_content)
 
-    response = requests.post(path, auth=RequestsAuthPluginVeracodeHMAC(), headers=json_headers, json=json.loads(request_content))
+    response = requests.post(path, auth=RequestsAuthPluginVeracodeHMAC(), headers=json_headers, json=json.loads(request_content), verify=True)
 
     if verbose:
         print(f"status code {response.status_code}")
@@ -368,9 +368,9 @@ def modify_user(api_base, user, can_create, generate_credentials, verbose):
         print(request_content)
 
     if is_new_user:
-        response = requests.post(path, auth=RequestsAuthPluginVeracodeHMAC(), headers=json_headers, json=json.loads(request_content))
+        response = requests.post(path, auth=RequestsAuthPluginVeracodeHMAC(), headers=json_headers, json=json.loads(request_content), verify=True)
     else:
-        response = requests.put(path, auth=RequestsAuthPluginVeracodeHMAC(), headers=json_headers, json=json.loads(request_content))
+        response = requests.put(path, auth=RequestsAuthPluginVeracodeHMAC(), headers=json_headers, json=json.loads(request_content), verify=True)
 
     if verbose:
         print(f"status code {response.status_code}")
@@ -382,10 +382,13 @@ def modify_user(api_base, user, can_create, generate_credentials, verbose):
             print(f"Successfully created {user["username"]}.")
         else:
             print(f"Successfully modified user permissions for {user["username"]}.")
-        if generate_credentials and body["api_credentials"]:
+        if generate_credentials and "api_credentials" in body:
             api_credentials = body["api_credentials"]
             api_id = api_credentials["api_id"]
             api_secret = api_credentials["api_secret"]
+        else:
+            api_id =""
+            api_secret = ""
         return STATUS_SUCCESS, api_id, api_secret
     else:
         body = response.json()
