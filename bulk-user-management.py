@@ -314,19 +314,20 @@ def modify_user(api_base, user, can_create, generate_credentials, verbose):
         print(error_message)
         return error_message, "", ""
 
-    user_guid = get_user_guid(api_base, user["username"], verbose)
+    username = user["username"]
+    user_guid = get_user_guid(api_base, username, verbose)
 
     if not user_guid and not can_create:
-        error_message = f"User with name '{user["username"]}' not found"
+        error_message = f"User with name '{username}' not found"
         print(error_message)
         return error_message, "", ""
     
     is_new_user = not user_guid 
 
     if is_new_user:
-        print(f"Creating user: {user["username"]}")
+        print(f"Creating user: {username}")
     else:
-        print(f"Updating user permissions for: {user["username"]}")
+        print(f"Updating user permissions for: {username}")
 
     if verbose:
         print("Using data:")
@@ -379,9 +380,9 @@ def modify_user(api_base, user, can_create, generate_credentials, verbose):
             print(body)
     if response.status_code == 200 or response.status_code == 201:
         if is_new_user:
-            print(f"Successfully created {user["username"]}.")
+            print(f"Successfully created {username}.")
         else:
-            print(f"Successfully modified user permissions for {user["username"]}.")
+            print(f"Successfully modified user permissions for {username}.")
         if generate_credentials and "api_credentials" in body:
             api_credentials = body["api_credentials"]
             api_id = api_credentials["api_id"]
@@ -393,9 +394,9 @@ def modify_user(api_base, user, can_create, generate_credentials, verbose):
     else:
         body = response.json()
         if (body):
-            error_message = f"Operation failed for user {user["username"]}: {response.status_code} - {body}"
+            error_message = f"Operation failed for user {username}: {response.status_code} - {body}"
         else:
-            error_message = f"Operation failed for user {user["username"]}: {response.status_code}"
+            error_message = f"Operation failed for user {username}: {response.status_code}"
         print(error_message)
         return error_message, "", ""
     
