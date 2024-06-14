@@ -269,7 +269,8 @@ def get_error_node_value(body):
 def get_user_guid(api_base, username, verbose):
     try:
         return get_item_from_api_call(api_base, "api/authn/v2/users?deleted=false&user_name="+ request_encode(username.strip()), username.strip(), "users", "user_name", "user_id", True, verbose, False)
-    except (NoResultFoundException, NoExactMatchFoundException) :
+    except (NoResultFoundException, NoExactMatchFoundException):
+        print(f"Active user {username} not found, looking for inactive users")
         return get_item_from_api_call(api_base, "api/authn/v2/users?deleted=false&inactive=true&user_name="+ request_encode(username.strip()), username.strip(), "users", "user_name", "user_id", True, verbose, False)
     
 
@@ -356,7 +357,7 @@ def modify_user(api_base, user, can_create, generate_credentials, verbose):
     content = add_field_if_not_blank_or_none(content, "phone", user["phone"])
     content = add_field_if_not_blank_or_none(content, "title", user["position"])
     content = add_field_if_not_blank_or_none(content, None, list_allowed_ip_addresses(user["restrict_login_ips"]))
-    content = add_field_if_not_blank_or_none(content, "login_enabled", (user["is_login_enabled"] or "").lower())
+    content = add_field_if_not_blank_or_none(content, "login_enabled", str(user["is_login_enabled"] or "").lower())
     content = add_field_if_not_blank_or_none(content, "custom_one", user["custom_1"])
     content = add_field_if_not_blank_or_none(content, "custom_two", user["custom_2"])
     content = add_field_if_not_blank_or_none(content, "custom_three", user["custom_3"])
