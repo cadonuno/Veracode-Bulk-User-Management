@@ -267,7 +267,12 @@ def get_error_node_value(body):
         return ""
     
 def get_user_guid(api_base, username, verbose):
-    return get_item_from_api_call(api_base, "api/authn/v2/users?deleted=false&inactive=true&user_name="+ request_encode(username.strip()), username.strip(), "users", "user_name", "user_id", True, verbose, False)
+    try:
+        return get_item_from_api_call(api_base, "api/authn/v2/users?deleted=false&user_name="+ request_encode(username.strip()), username.strip(), "users", "user_name", "user_id", True, verbose, False)
+    except (NoResultFoundException, NoExactMatchFoundException) :
+        return get_item_from_api_call(api_base, "api/authn/v2/users?deleted=false&inactive=true&user_name="+ request_encode(username.strip()), username.strip(), "users", "user_name", "user_id", True, verbose, False)
+    
+
 
 def add_field_if_not_blank_or_none(current_content, field_name, field_value):
     if not field_value:
