@@ -32,7 +32,7 @@ appropriate file protections in place.
     a new column will be added to the right containing the status of each line
     
 ### Running the script
-    py bulk-user-management.py -f <excel_file_with_user_information> [-c] [-d]
+    py bulk-user-management.py -f <excel_file_with_user_information> [-c] [-d] [-g]
         Reads all lines in <excel_file_with_user_information>, for each line, it will modify the user profile
         If a field is left empty, it will not be modified, to clear assigned teams, set the value to NONE (case sensitive). 
         If a team does not exist, it will be created.
