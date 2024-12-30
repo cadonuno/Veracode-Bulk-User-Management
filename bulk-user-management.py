@@ -134,7 +134,7 @@ def get_item_from_api_call(api_base, api_to_call, item_to_find, list_name, field
         failed_attempts+=1
         if (failed_attempts < max_attempts_per_request):
             time.sleep(sleep_time)
-            return get_item_from_api_call(api_base, api_to_call, item_to_find, list_name, field_to_check, field_to_get, verbose)
+            return get_item_from_api_call(api_base, api_to_call, item_to_find, list_name, field_to_check, field_to_get, is_exact_match, verbose, error_on_not_found)
         else:
             error_message = f"ERROR: trying to get {list_name} named {item_to_find}"
             print(error_message)
