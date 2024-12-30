@@ -10,6 +10,7 @@ import xml.etree.ElementTree as ET  # for parsing XML
 
 from veracode_api_signing.credentials import get_credentials
 
+
 class NoExactMatchFoundException(Exception):
     message=""
     def __init__(self, message_to_set):
@@ -69,6 +70,8 @@ TEAM_ADMIN_RELATIONSHIP = "ADMIN"
 TEAM_MEMBER_RELATIONSHIP = "MEMBER"
 NONE = "NONE"
 
+verify_ssl = True
+
 teams_cache = {}
 
 json_headers = {
@@ -113,7 +116,7 @@ def get_item_from_api_call(api_base, api_to_call, item_to_find, list_name, field
     if verbose:
         print(f"Calling: {path}")
 
-    response = requests.get(path, auth=RequestsAuthPluginVeracodeHMAC(), headers=json_headers, verify=True)
+    response = requests.get(path, auth=RequestsAuthPluginVeracodeHMAC(), headers=json_headers, verify=verify_ssl)
     data = response.json()
 
     if response.status_code == 200:
@@ -170,7 +173,7 @@ def create_team_for_name(api_base, team_name, verbose):
     if verbose:
         print(request_content)
 
-    response = requests.post(path, auth=RequestsAuthPluginVeracodeHMAC(), headers=json_headers, json=json.loads(request_content), verify=True)
+    response = requests.post(path, auth=RequestsAuthPluginVeracodeHMAC(), headers=json_headers, json=json.loads(request_content), verify=verify_ssl)
 
     if verbose:
         print(f"status code {response.status_code}")
@@ -375,9 +378,9 @@ def modify_user(api_base, user, can_create, generate_credentials, verbose):
         print(request_content)
 
     if is_new_user:
-        response = requests.post(path, auth=RequestsAuthPluginVeracodeHMAC(), headers=json_headers, json=json.loads(request_content), verify=True)
+        response = requests.post(path, auth=RequestsAuthPluginVeracodeHMAC(), headers=json_headers, json=json.loads(request_content), verify=verify_ssl)
     else:
-        response = requests.put(path, auth=RequestsAuthPluginVeracodeHMAC(), headers=json_headers, json=json.loads(request_content), verify=True)
+        response = requests.put(path, auth=RequestsAuthPluginVeracodeHMAC(), headers=json_headers, json=json.loads(request_content), verify=verify_ssl)
 
     if verbose:
         print(f"status code {response.status_code}")
@@ -471,6 +474,7 @@ def get_api_base():
 def main(argv):
     """Allows for bulk creation or modifying user and permissions"""
     global failed_attempts
+    global verify_ssl
     excel_file = None
     try:
         verbose = False
@@ -478,7 +482,7 @@ def main(argv):
         generate_credentials = False
         file_name = ''
 
-        opts, args = getopt.getopt(argv, "hdcgf:", ["file_name="])
+        opts, args = getopt.getopt(argv, "hdcgfv:", ["file_name=","verify_ssl"])
         for opt, arg in opts:
             if opt == '-h':
                 print_help()
@@ -488,6 +492,8 @@ def main(argv):
                 can_create = True
             if opt == '-g':
                 generate_credentials = True
+            if opt in ('-v', '--verify_ssl'):
+                verify_ssl=arg.strip().lower() == "true"
             if opt in ('-f', '--file_name'):
                 file_name=arg
 
