@@ -482,7 +482,7 @@ def main(argv):
         generate_credentials = False
         file_name = ''
 
-        opts, args = getopt.getopt(argv, "hdcgfv:", ["file_name=","verify_ssl="])
+        opts, args = getopt.getopt(argv, "hdcgf:v:", ["file_name=","verify_ssl="])
         for opt, arg in opts:
             if opt == '-h':
                 print_help()
