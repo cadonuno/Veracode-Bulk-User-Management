@@ -75,7 +75,6 @@ verify_ssl = True
 teams_cache = {}
 
 json_headers = {
-    "User-Agent": "Bulk application creation - python script",
     "Content-Type": "application/json"
 }
 
@@ -278,14 +277,14 @@ def get_user_guid(api_base, username, verbose):
     
 
 
-def add_field_if_not_blank_or_none(current_content, field_name, field_value):
+def add_field_if_not_blank_or_none(current_content, field_name, field_value, is_boolean=False):
     if not field_value:
         return current_content
     if field_value == NONE:
         field_value = ''
     if field_name:
         return current_content + f''',
-            "{field_name}": "{field_value}"'''
+            "{field_name}": {'' if is_boolean else '"'}{field_value}{'' if is_boolean else '"'}'''
     else:
         return current_content + f''',
             {field_value}'''
@@ -345,7 +344,7 @@ def modify_user(api_base, user, can_create, generate_credentials, verbose):
     if is_new_user:
         url_ending = f"?generate_api_creds={"true" if generate_credentials and user["is_service_account"] else "false"}"
     else:
-        url_ending = f"/{user_guid}?partial=true"
+        url_ending = f"/{user_guid}?partial=true&incremental=false"
 
 
     path = f"{api_base}api/authn/v2/users{url_ending}"
@@ -353,14 +352,14 @@ def modify_user(api_base, user, can_create, generate_credentials, verbose):
     content = f'''"user_name": "{user["username"]}"'''
     if is_new_user and user["is_service_account"]:
         content = add_permission_based_on_teams(content)
-    content = add_field_if_not_blank_or_none(content, "active", user["is_active"])
+    content = add_field_if_not_blank_or_none(content, "active", user["is_active"], True)
     content = add_field_if_not_blank_or_none(content, "first_name", user["first_name"])
     content = add_field_if_not_blank_or_none(content, "last_name", user["last_name"])
     content = add_field_if_not_blank_or_none(content, "email_address", user["email"])
     content = add_field_if_not_blank_or_none(content, "phone", user["phone"])
     content = add_field_if_not_blank_or_none(content, "title", user["position"])
     content = add_field_if_not_blank_or_none(content, None, list_allowed_ip_addresses(user["restrict_login_ips"]))
-    content = add_field_if_not_blank_or_none(content, "login_enabled", str(user["is_login_enabled"] or "").lower())
+    content = add_field_if_not_blank_or_none(content, "login_enabled", None if user["is_login_enabled"] == None else str(user["is_login_enabled"]).lower(), True)
     content = add_field_if_not_blank_or_none(content, "custom_one", user["custom_1"])
     content = add_field_if_not_blank_or_none(content, "custom_two", user["custom_2"])
     content = add_field_if_not_blank_or_none(content, "custom_three", user["custom_3"])
